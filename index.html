@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>球球萌萌哒 · Macaron Blobs</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { width:100%; height:100%; overflow:hidden; background:#ffffff;
+    font-family:"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif; touch-action:none; }
+  #c { display:block; width:100vw; height:100vh; }
+  .hud { position:fixed; pointer-events:none; user-select:none; z-index:5; }
+
+  #scoreBox { left:18px; top:16px; }
+  #scoreBox .mass { font-size:30px; font-weight:800; color:#7a6f8f; letter-spacing:1px; }
+  #scoreBox .label { font-size:12px; color:#b9b3c9; font-weight:600; letter-spacing:3px; }
+
+  #board { right:16px; top:16px; background:rgba(255,255,255,.38); backdrop-filter:blur(4px);
+    border-radius:18px; padding:10px 14px; box-shadow:0 6px 24px rgba(160,140,200,.10);
+    border:1px solid rgba(241,236,247,.6); min-width:150px; }
+  #board h3 { font-size:11px; color:rgba(195,188,214,.9); letter-spacing:3px; text-align:center; margin-bottom:6px; }
+  #board .row { display:flex; justify-content:space-between; font-size:12px; color:rgba(141,132,163,.85);
+    padding:1px 0; font-weight:600; }
+  #board .row.me { color:#f0699b; font-weight:800; }
+  #board .rank { width:20px; color:rgba(205,198,222,.85); }
+
+  #restartBtn { position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:6;
+    width:44px; height:44px; border-radius:50%; border:none; cursor:pointer;
+    background:rgba(255,255,255,.85); box-shadow:0 6px 20px rgba(160,140,200,.2);
+    font-size:20px; color:#a49bc0; }
+  #restartBtn:hover { transform:translateX(-50%) scale(1.08); }
+
+  #fsBtn { position:fixed; top:16px; left:calc(50% + 56px); z-index:6;
+    width:44px; height:44px; border-radius:50%; border:none; cursor:pointer;
+    background:rgba(255,255,255,.85); box-shadow:0 6px 20px rgba(160,140,200,.2);
+    font-size:18px; color:#a49bc0; }
+  #fsBtn:hover { transform:scale(1.08); }
+
+  #rotateTip { position:fixed; inset:0; z-index:50; display:none; align-items:center; justify-content:center;
+    flex-direction:column; gap:14px; background:#ffffff; color:#a49bc0; font-weight:800;
+    font-size:20px; letter-spacing:4px; }
+  #rotateTip .phone { font-size:56px; animation:rot 2s ease-in-out infinite; }
+  @keyframes rot { 0%,20%{transform:rotate(90deg)} 60%,100%{transform:rotate(0)} }
+  /* 显示由 JS 控制：非全屏且横屏时才提示（全屏状态允许横屏游玩） */
+  /* 竖屏窄屏 HUD 优化 */
+  @media (max-width: 520px){
+    #board { padding:8px 10px; min-width:120px; border-radius:14px; }
+    #board .row { font-size:11px; }
+    #scoreBox .mass { font-size:24px; }
+    #minimap { width:90px; height:90px; }
+    #hint { font-size:10px; bottom:10px; }
+  }
+
+  #minimap { left:18px; bottom:18px; width:120px; height:120px; background:rgba(255,255,255,.85);
+    border:1px solid #efe9f6; border-radius:16px; box-shadow:0 6px 24px rgba(160,140,200,.12); }
+
+  #manualBar { left:50%; bottom:14px; transform:translateX(-50%); z-index:7;
+    background:rgba(255,255,255,.6); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px);
+    border:1px solid rgba(238,230,245,.6); border-radius:999px;
+    padding:8px 22px; font-size:12px; color:#8d84a3; font-weight:700; letter-spacing:2px;
+    box-shadow:0 4px 16px rgba(160,140,200,.12); cursor:pointer; pointer-events:auto;
+    user-select:none; white-space:nowrap; }
+  #manualBar:hover { color:#f0699b; }
+  #manualPanel { position:fixed; left:50%; bottom:52px; transform:translateX(-50%); z-index:8;
+    display:none; width:min(560px, 92vw); max-height:min(62vh, 520px); overflow-y:auto;
+    background:rgba(255,255,255,.45); backdrop-filter:blur(5px); -webkit-backdrop-filter:blur(5px);
+    border:1px solid rgba(238,230,245,.55); border-radius:22px;
+    padding:20px 24px; box-shadow:0 14px 40px rgba(160,140,200,.14);
+    font-size:13px; line-height:1.9; color:#7a6f8f; font-weight:600; pointer-events:auto;
+    touch-action:pan-y; }
+  #manualPanel h4 { font-size:14px; color:#7a6f8f; margin:14px 0 4px; letter-spacing:2px; }
+  #manualPanel h4:first-child { margin-top:0; }
+  #manualPanel p { margin:0; color:#7a6f8f; }
+  #manualPanel .em { color:#7a6f8f; font-weight:800; }
+  #manualClose { position:sticky; top:0; float:right; border:none; background:none;
+    font-size:18px; color:#7a6f8f; cursor:pointer; font-weight:800; }
+
+  #bossBanner { left:50%; top:18%; transform:translateX(-50%); display:none;
+    background:linear-gradient(120deg,rgba(255,107,129,.95),rgba(255,159,124,.95));
+    color:#fff; font-weight:900; font-size:20px; letter-spacing:3px;
+    padding:14px 30px; border-radius:999px; white-space:nowrap;
+    box-shadow:0 10px 34px rgba(255,107,129,.5); animation:bossPulse 1s ease-in-out infinite; }
+  @keyframes bossPulse { 0%,100%{transform:translateX(-50%) scale(1)} 50%{transform:translateX(-50%) scale(1.06)} }
+
+  .tbtn { position:fixed; z-index:6; width:64px; height:64px; border-radius:50%; border:none;
+    background:rgba(255,255,255,.9); box-shadow:0 6px 20px rgba(160,140,200,.2);
+    font-size:22px; color:#a49bc0; font-weight:800; display:none; }
+  #btnSplit { right:24px; bottom:96px; }
+  #btnEject { right:104px; bottom:30px; }
+  body.touch .tbtn { display:block; }
+
+  /* ---- overlays ---- */
+  .overlay { position:fixed; inset:0; z-index:10; display:flex; align-items:center; justify-content:center;
+    background:rgba(255,255,255,.9); backdrop-filter:blur(10px); }
+  .panel { text-align:center; animation:pop .5s cubic-bezier(.2,1.4,.4,1); }
+  @keyframes pop { from { transform:scale(.7); opacity:0; } to { transform:scale(1); opacity:1; } }
+  .logo { font-size:52px; font-weight:900; letter-spacing:6px;
+    background:linear-gradient(120deg,#f7a8c4,#ffd3a5,#b5e8d5,#aec6ff,#c9b6f0);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 4px 14px rgba(240,180,210,.45)); }
+  .sub { color:#b9b3c9; font-size:14px; letter-spacing:5px; margin:8px 0 30px; }
+  #nameInput { width:250px; padding:13px 18px; border:2px solid #eee6f5; border-radius:999px;
+    outline:none; font-size:16px; text-align:center; color:#7a6f8f; font-weight:600;
+    box-shadow:0 4px 18px rgba(190,170,220,.12); transition:.2s; }
+  #nameInput:focus { border-color:#f7b6cd; box-shadow:0 4px 22px rgba(247,170,200,.3); }
+  .bigBtn { display:block; margin:20px auto 0; padding:14px 58px; border:none; border-radius:999px;
+    font-size:19px; font-weight:800; letter-spacing:4px; color:#fff; cursor:pointer;
+    background:linear-gradient(120deg,#f9a8c0,#f8c8a0);
+    box-shadow:0 10px 28px rgba(249,160,190,.5); transition:.15s; }
+  .bigBtn:hover { transform:translateY(-2px) scale(1.03); }
+  .bigBtn:active { transform:scale(.96); }
+  #deathOverlay { display:none; }
+  #deathOverlay .rank-line { color:#9b91b5; font-size:16px; margin-bottom:6px; font-weight:600; }
+  .blobs-deco { display:flex; gap:10px; justify-content:center; margin-bottom:18px; }
+  .bd { width:34px; height:34px; border-radius:50%; animation:bob 1.6s ease-in-out infinite; }
+  @keyframes bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="hud" id="scoreBox">
+  <div class="mass" id="massVal">0</div>
+  <div class="label">质量 MASS</div>
+  <div class="label" id="cellCount" style="margin-top:6px; font-size:13px; color:#c9aed6;">分身 1/10</div>
+</div>
+<div class="hud" id="board"><h3>排行榜 TOP 15</h3><div id="boardRows"></div></div>
+<canvas class="hud" id="minimap" width="240" height="240"></canvas>
+<div id="manualBar" class="hud">📜 玩家说明书（点我展开）</div>
+<div id="manualPanel">
+  <button id="manualClose">✕</button>
+  <h4>🎮 基础操作</h4>
+  <p>移动：鼠标移动 / 手指拖动屏幕，球球会朝指针方向滚动。</p>
+  <p>分身：按 <span class="em">空格键</span>（手机点 ✂ 按钮）。<span class="em">使用次数无限</span>，一分为二向前弹射夹击敌人，11 秒后自动合体。同时存在的分身上限 <span class="em">12 个</span>。</p>
+  <p>吐豆豆：按 <span class="em">W 键</span>（手机点 💧 按钮），朝瞄准方向发射，<span class="em">不消耗自己的质量</span>。</p>
+  <p>重新开始：点屏幕顶部 <span class="em">↺ 按钮</span> 或按 <span class="em">R 键</span>，可选择继续或完全重开一局。</p>
+  <p>全屏：点顶部 <span class="em">⛶ 按钮</span> 或按 <span class="em">F 键</span>，再次点击/按键退出全屏。</p>
+  <h4>🍡 成长规则</h4>
+  <p>吃彩色小孢子长大（每颗 +1 左右）；大球碰到比自己小 18% 以上的球即可吞噬；吃落在地上的豆豆快速变大（+6）。</p>
+  <p>体重越大移动越慢，所以别贪大——灵活的小球也有生存优势。</p>
+  <p><span class="em">🛡 新手保护期</span>：你的总体重达到 2600 之前，人机不能吞你、它们的豆豆对你无效、也不会追你；达到 2600 后保护自动解除（左上角会显示保护状态）。</p>
+  <h4>💥 豆豆攻击（不耗质量，随便吐！）</h4>
+  <p>体重越小越强：一次吐 <span class="em">5 颗</span>扇形散射、射速 0.22 秒、弹速快；体重越大：一次 1 颗、射速变慢、弹速变慢。</p>
+  <p>命中敌人造成伤害并击退。伤害 = 基础 2 + 目标体重 2%（BOSS 模式中为 3 + 3.5%）；<span class="em">以小打大</span>（你的体重不到对方一半）额外 ×1.5 倍。</p>
+  <p>豆豆落地减速后变成食物豆，任何人吃了都能 +6 变大。</p>
+  <h4>🟢 绿齿轮（刺球）</h4>
+  <p>场上共 20 个。比齿轮大的球撞上去会<span class="em">被炸成 10 个分身</span>（质量不够 10 块时按剩余质量尽量裂）；比它小的球无法吞噬它，只能绕行。</p>
+  <h4>👑 BOSS 模式</h4>
+  <p>你的总体重首次达到 <span class="em">3000</span> 立即触发（通关一次后，需体重突破 <span class="em">4600</span> 才会再次触发）。触发瞬间场上球球数量变为 <span class="em">38</span> 个。</p>
+  <p>触发瞬间全部球球变异：体重 2000、红光 + 👑 标记、主动围剿你、靠近就朝你吐豆。</p>
+  <p>BOSS 的豆豆能打伤你但没有营养，且它们<span class="em">只攻击你一人</span>、互相之间既不吞噬也不互射；只有你吐的豆豆既有伤害又能变大。BOSS 模式下你的<span class="em">移动速度大幅提升且与体积无关</span>——长得再大也跑得飞快。把场上球球<span class="em">全部吞并</span>即 BOSS 通关。死亡会自动解除 BOSS 模式。</p>
+  <h4>🏆 彻底胜利</h4>
+  <p>体重达到 <span class="em">99999</span> → 比赛彻底结束，进入冠军结算，可重新开始。</p>
+  <h4>📋 界面说明</h4>
+  <p>右上角为前 15 名排行榜（半透明不挡视野）；左上角显示你的体重与分身数；左下角小地图可看全场大势；死亡后点"再来一局"原地复活。普通模式竖屏游玩；按 F 进入全屏后可横屏畅玩。</p>
+</div>
+<div class="hud" id="bossBanner">👑 BOSS 模式！全场变异：体重 3100 · 全员吐豆</div>
+<button class="tbtn" id="btnSplit">✂</button>
+<button class="tbtn" id="btnEject">💧</button>
+<button id="restartBtn" title="重新开始">↺</button>
+<button id="fsBtn" title="全屏 (F)">⛶</button>
+
+<div id="rotateTip"><div class="phone">📱</div>请竖屏游玩体验更佳</div>
+
+<div class="overlay" id="pauseOverlay" style="display:none">
+  <div class="panel">
+    <div class="logo" style="font-size:38px">休息一下？</div>
+    <div class="sub">READY TO RESTART</div>
+    <button class="bigBtn" id="resumeBtn" style="background:linear-gradient(120deg,#aec6ff,#c9b6f0)">继续游戏</button>
+    <button class="bigBtn" id="confirmRestartBtn">重新开始</button>
+  </div>
+</div>
+
+<div class="overlay" id="winOverlay" style="display:none">
+  <div class="panel">
+    <div class="blobs-deco">
+      <div class="bd" style="background:#ffd700;animation-delay:0s"></div>
+      <div class="bd" style="background:#f7a8c4;animation-delay:.15s"></div>
+      <div class="bd" style="background:#b5e8d5;animation-delay:.3s"></div>
+    </div>
+    <div class="logo" style="font-size:44px">🏆 彻底胜利！</div>
+    <div class="rank-line" id="winStats">体重 99999</div>
+    <div class="sub" style="margin-bottom:22px">你已称霸整个球场！CHAMPION!</div>
+    <button class="bigBtn" id="winRestartBtn">重新开始</button>
+  </div>
+</div>
+
+<div class="overlay" id="startOverlay">
+  <div class="panel">
+    <div class="blobs-deco">
+      <div class="bd" style="background:#f7a8c4;animation-delay:0s"></div>
+      <div class="bd" style="background:#ffe3a0;animation-delay:.15s"></div>
+      <div class="bd" style="background:#b5e8d5;animation-delay:.3s"></div>
+      <div class="bd" style="background:#aec6ff;animation-delay:.45s"></div>
+      <div class="bd" style="background:#c9b6f0;animation-delay:.6s"></div>
+    </div>
+    <div class="logo">球球萌萌哒</div>
+    <div class="sub">MACARON BLOB ARENA</div>
+    <input id="nameInput" maxlength="8" placeholder="给自己起个名字吧~" value="">
+    <button class="bigBtn" id="playBtn">开始游戏</button>
+  </div>
+</div>
+
+<div class="overlay" id="deathOverlay">
+  <div class="panel">
+    <div class="logo" style="font-size:38px">被吃掉啦！</div>
+    <div class="rank-line" id="deathRank">存活排名 #1</div>
+    <div class="sub" style="margin-bottom:22px" id="deathScore">最终质量 0</div>
+    <button class="bigBtn" id="respawnBtn">再来一局</button>
+  </div>
+</div>
+
+<script>
+// ================= 基础 =================
+const canvas = document.getElementById('c'), ctx = canvas.getContext('2d');
+const mm = document.getElementById('minimap'), mctx = mm.getContext('2d');
+let W = 0, H = 0, DPR = Math.min(devicePixelRatio || 1, 2);
+function resize(){ W = innerWidth; H = innerHeight;
+  canvas.width = W*DPR; canvas.height = H*DPR; canvas.style.width = W+'px'; canvas.style.height = H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0); }
+addEventListener('resize', resize); resize();
+
+const WORLD = 4200;
+const MAX_CELLS = 12;      // 分身上限：最多同时 12 个分身（使用次数无限）
+const BOSS_MASS = 3000;    // 玩家首次达到此体重触发 BOSS 模式（再次触发需 4600）
+const BOSS_BOT_MASS = 2000;// BOSS 模式下所有机器人球球的体重
+const BOT_COUNT = 60;      // 人机数量
+const BOSS_BOT_COUNT = 38; // BOSS 模式触发时场上球球数量变为 38
+const PELLET_COUNT = 900;  // 场上孢子数量（人机多了同步加量）
+const FINAL_WIN = 99999;   // 彻底胜利体重
+const BOARD_TOP = 15;      // 排行榜显示名次
+const PALETTE = ['#F7A8C4','#FFD3A5','#FFE9A8','#B5EAD7','#AEC6FF','#C9B6F0','#FFB7B2','#A8E6CF'];
+const rand = (a,b)=>a+Math.random()*(b-a);
+const pick = arr=>arr[Math.random()*arr.length|0];
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+const BOT_NAMES = ['糯米团','小泡芙','麻薯球','果冻','布丁','雪媚娘','奶黄包','汤圆','QQ糖','棉花糖','甜甜圈','马卡龙','奶昔','星冰乐'];
+
+// ================= 实体 =================
+let pellets = [], viruses = [], ejected = [], bots = [], player = null, camera = {x:WORLD/2,y:WORLD/2,zoom:1};
+let gameState = 'menu'; // menu | play | dead
+let totalEaten = 0, beanHits = 0;
+let bossMode = false;
+let nextBossThreshold = BOSS_MASS; // 首次 3000 触发，通关后下次需 4600
+let playerProtected = true;        // 体重 2600 前的新手保护：人机不可攻击玩家
+
+function massToR(m){ return Math.sqrt(m)*4.2; }
+function speedOf(m){ return 6.4 * Math.pow(massToR(m)/22, -0.30); } // 越大越慢
+
+function makeCell(x,y,mass,color,name,isPlayer){
+  return { x,y, mass, r:massToR(mass), color, name, isPlayer,
+    vx:0, vy:0, tx:x, ty:y, mergeAt:0, dead:false,
+    eyePhase:rand(0,6.28), blink:0, wobble:rand(0,6.28) };
+}
+
+function spawnPellets(n){
+  for(let i=0;i<n;i++) pellets.push({
+    x:rand(40,WORLD-40), y:rand(40,WORLD-40), m:rand(0.9,1.6),
+    color:pick(PALETTE), phase:rand(0,6.28), big:Math.random()<0.06
+  });
+}
+function spawnVirus(n){
+  for(let i=0;i<n;i++) viruses.push({ x:rand(200,WORLD-200), y:rand(200,WORLD-200),
+    m:110, color:'#B8E8C8', phase:rand(0,6.28) });
+}
+
+function spawnPlayer(name){
+  player = { cells:[], name: name||'萌新', color:pick(PALETTE) };
+  respawnPlayer();
+}
+function respawnPlayer(){
+  const c = makeCell(rand(500,WORLD-500), rand(500,WORLD-500), 22, player.color, player.name, true);
+  c.tx=c.x; c.ty=c.y; player.cells=[c];
+  totalEaten = 0; beanHits = 0;
+  bossMode = false; nextBossThreshold = BOSS_MASS;
+}
+function spawnBot(){
+  const b = makeCell(rand(300,WORLD-300), rand(300,WORLD-300), rand(16,60), pick(PALETTE), pick(BOT_NAMES), false);
+  b.wander = rand(0,6.28); b.think = 0;
+  if(bossMode){ // BOSS 模式下新刷出的球球直接变异
+    b.mass = BOSS_BOT_MASS; b.r = massToR(b.mass); b.boss = true;
+  }
+  return b;
+}
+
+// ================= 输入 =================
+let mouse = {x:W/2, y:H/2};
+const isTouch = 'ontouchstart' in window;
+if(isTouch) document.body.classList.add('touch');
+function inManual(t){ return t && t.closest && t.closest('#manualPanel,#manualBar'); }
+addEventListener('mousemove', e=>{ mouse.x=e.clientX; mouse.y=e.clientY; });
+addEventListener('touchmove', e=>{
+  if(inManual(e.target)) return; // 说明书内滑动 = 滚动面板，不移动球球
+  const t=e.touches[0]; mouse.x=t.clientX; mouse.y=t.clientY; e.preventDefault(); }, {passive:false});
+addEventListener('touchstart', e=>{
+  if(inManual(e.target)) return; // 点在说明书上不改变移动目标
+  const t=e.touches[0]; mouse.x=t.clientX; mouse.y=t.clientY; });
+
+function doSplit(){
+  if(gameState!=='play') return;
+  const now = performance.now();
+  const newCells = [];
+  for(const c of player.cells){
+    if(c.mass < 40 || now < c.mergeAt) continue;
+    c.mass /= 2; c.r = massToR(c.mass);
+    const ang = Math.atan2(c.ty-c.y, c.tx-c.x);
+    const nc = makeCell(c.x+Math.cos(ang)*c.r, c.y+Math.sin(ang)*c.r, c.mass, c.color, c.name, true);
+    nc.mergeAt = now + 11000;
+    c.mergeAt = now + 11000;
+    nc.vx = Math.cos(ang)*22; nc.vy = Math.sin(ang)*22;
+    nc.tx = nc.x + Math.cos(ang)*600; nc.ty = nc.y + Math.sin(ang)*600;
+    newCells.push(nc);
+    if(player.cells.length + newCells.length >= MAX_CELLS) break;
+  }
+  player.cells.push(...newCells);
+}
+let beanCd = 0; // 豆豆攻击冷却（秒）
+// 射速与自身体积挂钩：越小射得越快
+function ejectCooldown(mass){ return 0.18 + mass/500; }
+// 豆弹初速：大球吐得慢
+function beanSpeed(mass){ return 16 * clamp(Math.pow(22/mass, 0.18), 0.55, 1.15); }
+// 每次吐的颗数：小球一次一把，大球只有 1 颗
+function beanCount(mass){ return clamp(Math.round(300/mass), 1, 5); }
+
+function doEject(owner){
+  const cells = owner ? (owner.cells || [owner]) : player.cells;
+  const isPlayerOwner = !owner || owner===player;
+  // 营养规则：BOSS 模式下敌方豆豆没有营养（吃了不变大），只有自己的豆豆既能伤人又能变大
+  const nutri = isPlayerOwner ? 6 : (bossMode ? 0 : 6);
+  // BOSS 豆豆：固定伤害（保证战斗有压迫感但不会瞬间蒸发玩家）
+  const bossBean = bossMode && owner && owner!==player && !owner.isPlayer;
+  for(const c of cells){
+    if(c.dead || c.mass < 12) continue;
+    // BOSS 模式下玩家吐豆能力视为刚出生：颗数/弹速全部拉满（射速在 playerBeanCd 里）
+    const em = (isPlayerOwner && bossMode) ? 22 : c.mass;
+    const count = beanCount(em);
+    const v = beanSpeed(em);
+    const baseAng = Math.atan2(c.ty-c.y, c.tx-c.x);
+    const spread = 0.16; // 多颗豆扇形散射间隔
+    // 伤害：BOSS 模式下玩家豆豆全额百分比；触发前玩家和机器人的豆豆伤害都调低
+    const dmgBase = bossBean ? 12 : (isPlayerOwner ? (bossMode ? 3 : 2) : (bossMode ? 3 : 2));
+    const pct = bossBean ? 0 : (isPlayerOwner ? (bossMode ? 0.035 : 0.02) : (bossMode ? 0.035 : 0.02));
+    for(let i=0;i<count;i++){
+      const ang = baseAng + (i-(count-1)/2)*spread;
+      ejected.push({ x:c.x+Math.cos(ang)*(c.r+4), y:c.y+Math.sin(ang)*(c.r+4),
+        vx:Math.cos(ang)*v, vy:Math.sin(ang)*v, m:nutri, color:c.color, life:1,
+        owner: owner||player, dmg: dmgBase, atk:true, shooterMass:c.mass, bossBean, pct });
+    }
+  }
+}
+function playerBeanCd(){
+  if(bossMode) return ejectCooldown(22); // BOSS 模式：射速与刚出生一致
+  if(!player || !player.cells.length) return 0.5;
+  let s=0,w=0; for(const c of player.cells){ s+=c.mass*c.mass; w+=c.mass; }
+  return ejectCooldown(w? s/w : 22);
+}
+addEventListener('keydown', e=>{
+  if(e.code==='Space'){ e.preventDefault(); doSplit(); }
+  if(e.code==='KeyW' && gameState==='play' && beanCd<=0){ doEject(); beanCd = playerBeanCd(); }
+});
+document.getElementById('btnSplit').addEventListener('touchstart', e=>{ e.preventDefault(); doSplit(); });
+document.getElementById('btnEject').addEventListener('touchstart', e=>{
+  e.preventDefault();
+  if(gameState==='play' && beanCd<=0){ doEject(); beanCd = playerBeanCd(); }
+});
+
+// ================= 开始 / 死亡 =================
+const startOverlay = document.getElementById('startOverlay');
+const deathOverlay = document.getElementById('deathOverlay');
+document.getElementById('playBtn').onclick = ()=>{
+  const name = document.getElementById('nameInput').value.trim();
+  startOverlay.style.display='none';
+  startGame(name);
+};
+document.getElementById('respawnBtn').onclick = ()=>{
+  deathOverlay.style.display='none';
+  respawnPlayer(); gameState='play';
+};
+// 重新开始界面
+document.getElementById('restartBtn').onclick = ()=>{
+  if(gameState==='play') document.getElementById('pauseOverlay').style.display='flex';
+};
+document.getElementById('resumeBtn').onclick = ()=>{
+  document.getElementById('pauseOverlay').style.display='none';
+};
+document.getElementById('confirmRestartBtn').onclick = restartGame;
+document.getElementById('winRestartBtn').onclick = restartGame;
+// 全屏切换（F 键或 ⛶ 按钮）
+function toggleFullscreen(){
+  const doc = document, el = doc.documentElement;
+  const fsEl = doc.fullscreenElement || doc.webkitFullscreenElement;
+  if(fsEl){ (doc.exitFullscreen||doc.webkitExitFullscreen||function(){}).call(doc); }
+  else {
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if(req) req.call(el);
+  }
+}
+document.getElementById('fsBtn').onclick = toggleFullscreen;
+addEventListener('keydown', e=>{
+  if(e.code==='KeyF' && !e.repeat){ toggleFullscreen(); }
+});
+document.addEventListener('fullscreenchange', updateFsIcon);
+document.addEventListener('webkitfullscreenchange', updateFsIcon);
+function updateFsIcon(){
+  const fs = document.fullscreenElement || document.webkitFullscreenElement;
+  document.getElementById('fsBtn').textContent = fs ? '🗗' : '⛶';
+  updateRotateTip();
+}
+// 竖屏提示：只有【非全屏 + 横屏】时才显示；全屏状态下横屏畅玩不拦截
+function updateRotateTip(){
+  const fs = document.fullscreenElement || document.webkitFullscreenElement;
+  const landscape = innerWidth > innerHeight;
+  document.getElementById('rotateTip').style.display = (!fs && landscape) ? 'flex' : 'none';
+}
+addEventListener('resize', updateRotateTip);
+addEventListener('orientationchange', updateRotateTip);
+updateRotateTip();
+addEventListener('keydown', e=>{
+  if(e.code==='KeyR' && gameState==='play') document.getElementById('pauseOverlay').style.display='flex';
+});
+// 说明书展开/收起
+document.getElementById('manualBar').addEventListener('click', ()=>{
+  const p = document.getElementById('manualPanel');
+  p.style.display = p.style.display==='block' ? 'none' : 'block';
+});
+document.getElementById('manualClose').addEventListener('click', ()=>{
+  document.getElementById('manualPanel').style.display='none';
+});
+function startGame(name){
+  spawnPlayer(name);
+  gameState='play';
+}
+
+// ================= 世界初始化 =================
+spawnPellets(PELLET_COUNT); spawnVirus(20);
+for(let i=0;i<BOT_COUNT;i++) bots.push(spawnBot());
+
+// ================= 逻辑 =================
+function allCells(){
+  const arr = [];
+  if(gameState==='play') arr.push(...player.cells);
+  for(const b of bots) if(!b.dead) arr.push(b);
+  return arr;
+}
+
+function update(dt){
+  const now = performance.now();
+  beanCd -= dt;
+  // ===== BOSS 模式触发 + 新手保护判定 =====
+  if(gameState==='play' && player && player.cells.length){
+    const total = player.cells.reduce((s,c)=>s+c.mass,0);
+    playerProtected = total < 2600; // 2600 前人机不可攻击玩家
+    if(!bossMode && total >= nextBossThreshold) triggerBoss();
+    // ===== 彻底胜利：体重达到 99999，比赛结束 =====
+    if(total >= FINAL_WIN){ finalVictory(); return; }
+  }
+
+  // --- 玩家移动 ---
+  if(gameState==='play'){
+    const cx = avg(player.cells,'x'), cy = avg(player.cells,'y');
+    // 鼠标位置 -> 世界坐标
+    const wx = cx + (mouse.x - W/2)/camera.zoom;
+    const wy = cy + (mouse.y - H/2)/camera.zoom;
+    for(const c of player.cells){
+      c.tx = wx; c.ty = wy;
+      steer(c, dt);
+    }
+  }
+
+  // --- 机器人 AI ---
+  for(const b of bots){
+    b.think -= dt;
+    if(b.think<=0){
+      b.think = rand(0.15,0.4);
+      botThink(b);
+    }
+    steer(b, dt);
+  }
+
+  // --- 细胞间吞噬（含分身合体）---
+  const cells = allCells();
+  // 同主人分身：合并
+  if(player){
+    for(let i=0;i<player.cells.length;i++) for(let j=i+1;j<player.cells.length;j++){
+      const a=player.cells[i], b=player.cells[j];
+      if(!a.dead && !b.dead && now>a.mergeAt && now>b.mergeAt){
+        const d = Math.hypot(a.x-b.x, a.y-b.y);
+        if(d < a.r + b.r){
+          const big = a.mass>=b.mass?a:b, small = a.mass>=b.mass?b:a;
+          big.x = (big.x*big.mass + small.x*small.mass)/(big.mass+small.mass);
+          big.y = (big.y*big.mass + small.y*small.mass)/(big.mass+small.mass);
+          big.mass += small.mass; big.r = massToR(big.mass);
+          small.dead = true;
+        }
+      } else if(!a.dead && !b.dead && now<=a.mergeAt){
+        const d = Math.hypot(a.x-b.x,a.y-b.y);
+        if(d < a.r+b.r){ // 未到合体时间互相排斥
+          const push = (a.r+b.r-d)*0.5;
+          const ang = Math.atan2(b.y-a.y,b.x-a.x)||0.01;
+          if(!a.isPlayer){ a.x-=Math.cos(ang)*push*0.3; a.y-=Math.sin(ang)*push*0.3; }
+          b.x+=Math.cos(ang)*push*0.5; b.y+=Math.sin(ang)*push*0.5;
+          a.x-=Math.cos(ang)*push*0.5; a.y-=Math.sin(ang)*push*0.5;
+        }
+      }
+    }
+    player.cells = player.cells.filter(c=>!c.dead);
+  }
+
+  // 大吃小（新手保护期：人机不能吞噬玩家，玩家照常可以吞人机）
+  for(let i=0;i<cells.length;i++) for(let j=0;j<cells.length;j++){
+    if(i===j) continue;
+    const a=cells[i], b=cells[j];
+    if(a.dead||b.dead) continue;
+    if(b.isPlayer && playerProtected && !a.isPlayer) continue;
+    // BOSS 模式：人机不可吞并同类，只可以攻击玩家
+    if(bossMode && !a.isPlayer && !b.isPlayer) continue;
+    if(a.mass > b.mass*1.18){
+      const d = Math.hypot(a.x-b.x, a.y-b.y);
+      if(d < a.r - b.r*0.35){
+        a.mass += b.mass; a.r = massToR(a.mass);
+        b.dead = true;
+        popEffect(b.x,b.y,b.color);
+        if(b.isPlayer && player.cells.length===1) playerDie();
+        else if(b.isPlayer) player.cells = player.cells.filter(c=>!c.dead);
+        else {
+          // BOSS 模式吞掉球球（全部吞并时在下方补兵前判定胜利）
+          bots = bots.filter(x=>x!==b);
+        }
+      }
+    }
+  }
+
+  // 吃孢子
+  for(const c of cells){
+    for(let k=pellets.length-1;k>=0;k--){
+      const p=pellets[k];
+      const d = Math.hypot(c.x-p.x, c.y-p.y);
+      if(d < c.r){
+        c.mass += p.m; c.r = massToR(c.mass);
+        pellets.splice(k,1);
+        if(c.isPlayer) totalEaten++;
+      }
+    }
+    // 吃吐出的豆豆（只有减速变成食物豆后才能吃）
+    for(let k=ejected.length-1;k>=0;k--){
+      const p=ejected[k];
+      if(p.atk) continue;
+      const d = Math.hypot(c.x-p.x, c.y-p.y);
+      if(d < c.r*0.9){
+        c.mass += p.m; c.r = massToR(c.mass); ejected.splice(k,1);
+        if(p.m>0) effects.push({x:p.x, y:p.y, vx:0, vy:-1.4, life:1, color:c.color, txt:'+'+p.m});
+      }
+    }
+    // 病毒刺球
+    for(let k=viruses.length-1;k>=0;k--){
+      const v=viruses[k];
+      if(c.mass > v.m*1.25 && Math.hypot(c.x-v.x,c.y-v.y) < c.r - massToR(v.m)*0.5){
+        viruses.splice(k,1);
+        popEffect(v.x,v.y,'#B8E8C8');
+        // 碰齿轮固定弹成 10 个分身（质量不够裂 10 个时按 24 质量一块尽量裂）
+        const pieces = Math.min(10 - player.cells.length, Math.floor(c.mass/24));
+        if(pieces>1 && c.isPlayer){
+          const each = c.mass/(pieces+1);
+          c.mass = each; c.r = massToR(each);
+          const now2 = performance.now();
+          for(let q=0;q<pieces;q++){
+            const ang = (q/pieces)*6.283 + rand(-.3,.3);
+            const nc = makeCell(c.x+Math.cos(ang)*c.r, c.y+Math.sin(ang)*c.r, each, c.color, c.name, true);
+            nc.mergeAt = now2+11000; nc.vx=Math.cos(ang)*18; nc.vy=Math.sin(ang)*18;
+            nc.tx=nc.x; nc.ty=nc.y;
+            player.cells.push(nc);
+          }
+        } else if(!c.isPlayer){ b: bots = bots.filter(x=>x!==c); c.dead=true;
+          for(let q=0;q<3;q++) pellets.push({x:c.x+rand(-30,30),y:c.y+rand(-30,30),m:2,color:c.color,phase:rand(0,6.28),big:true});
+        }
+      }
+    }
+  }
+
+  // 吐出豆豆物理 + 攻击判定
+  for(let k=ejected.length-1;k>=0;k--){
+    const p=ejected[k];
+    p.x+=p.vx*dt*60; p.y+=p.vy*dt*60;
+    p.vx*=0.955; p.vy*=0.955;
+    p.x=clamp(p.x,20,WORLD-20); p.y=clamp(p.y,20,WORLD-20);
+
+    // 攻击豆豆：高速飞行时命中敌方细胞造成伤害+击退
+    if(p.atk){
+      const sp = Math.hypot(p.vx,p.vy);
+      if(sp < 3.2) p.atk = false; // 减速后变成可吃的食物豆
+      else for(const c of cells){
+        if(c.dead) continue;
+        const mine = (p.owner===player) ? c.isPlayer : c===p.owner;
+        if(mine) continue;
+        // 新手保护期：人机的豆豆对玩家无效
+        if(playerProtected && c.isPlayer && !p.owner.isPlayer && p.owner!==player) continue;
+        // BOSS 模式：人机只对玩家发起攻击，豆豆不伤同类
+        if(bossMode && p.owner!==player && !c.isPlayer) continue;
+        if(Math.hypot(c.x-p.x, c.y-p.y) < c.r + 6){
+          // 百分比伤害：大球挨豆掉得多；以小打大额外 1.5 倍加伤 → 大球被小球围射会迅速缩水
+          // BOSS 豆豆例外：固定 12 点伤害
+          let dmg;
+          if(p.bossBean){ dmg = 12; }
+          else {
+            dmg = p.dmg + c.mass * (p.pct ?? 0.035);
+            if(p.shooterMass < c.mass*0.5) dmg *= 1.5;
+          }
+          c.mass = Math.max(10, c.mass - dmg); c.r = massToR(c.mass);
+          const ang = Math.atan2(p.vy,p.vx);
+          c.vx += Math.cos(ang)*5; c.vy += Math.sin(ang)*5;
+          popEffect(p.x,p.y,p.color);
+          if(p.owner===player) beanHits++;
+          ejected.splice(k,1);
+          break;
+        }
+      }
+    }
+  }
+
+  // 补充孢子
+  while(pellets.length < PELLET_COUNT) pellets.push({ x:rand(40,WORLD-40), y:rand(40,WORLD-40),
+    m:rand(0.9,1.6), color:pick(PALETTE), phase:rand(0,6.28), big:Math.random()<0.06 });
+  while(viruses.length < 20 && Math.random()<0.02) spawnVirus(1);
+  // BOSS 模式胜利判定：把所有球球全部吞并
+  if(bossMode && bots.length===0){ bossVictory(); }
+  const cap = bossMode ? BOSS_BOT_COUNT : BOT_COUNT;
+  while(bots.length < cap) bots.push(spawnBot());
+
+  // 特效
+  updateEffects(dt);
+
+  // 相机
+  if(gameState==='play' && player.cells.length){
+    const cx=avg(player.cells,'x'), cy=avg(player.cells,'y');
+    const maxR = Math.max(...player.cells.map(c=>c.r));
+    const target = clamp(Math.pow(64/maxR, 0.5), 0.32, 1.15) * clamp(H/760, .6, 1.2);
+    camera.zoom += (target - camera.zoom)*0.04;
+    camera.x += (cx-camera.x)*0.09; camera.y += (cy-camera.y)*0.09;
+  }
+}
+
+function triggerBoss(){
+  bossMode = true;
+  // 人数缩至 38：优先保留体积最大的球球，多余的移除
+  if(bots.length > BOSS_BOT_COUNT){
+    bots.sort((a,b)=>b.mass-a.mass);
+    bots = bots.slice(0, BOSS_BOT_COUNT);
+  }
+  for(const b of bots){
+    b.mass = BOSS_BOT_MASS; b.r = massToR(b.mass); b.boss = true;
+    b.ejectCd = rand(0.5,1.5);
+  }
+  const banner = document.getElementById('bossBanner');
+  banner.textContent = '👑 BOSS 模式！全部球球变异：体重 2000 · 全员吐豆 · 吞并它们！';
+  banner.style.display = 'block';
+  setTimeout(()=>{ banner.style.display='none'; }, 4500);
+}
+function bossVictory(){
+  bossMode = false;
+  nextBossThreshold = 4600; // 通关后再次触发需要突破 4600
+  for(const b of bots){ b.boss=false; b.mass=rand(30,80); b.r=massToR(b.mass); }
+  const banner = document.getElementById('bossBanner');
+  banner.textContent = '🏆 吞并了所有球球！下次体重突破 4600 将再次触发 BOSS！';
+  banner.style.display = 'block';
+  setTimeout(()=>{ banner.style.display='none'; }, 5000);
+}
+
+function finalVictory(){
+  gameState = 'victory'; // 比赛彻底结束，画面定格
+  const m = Math.round(player.cells.reduce((s,c)=>s+c.mass,0));
+  document.getElementById('winStats').textContent =
+    '最终体重 '+m+' · 吃了 '+totalEaten+' 个孢子 · 豆豆命中 '+beanHits+' 次';
+  document.getElementById('winOverlay').style.display = 'flex';
+}
+function restartGame(){
+  document.getElementById('winOverlay').style.display='none';
+  document.getElementById('pauseOverlay').style.display='none';
+  document.getElementById('deathOverlay').style.display='none';
+  document.getElementById('bossBanner').style.display='none';
+  // 世界完全重置
+  bots = []; pellets = []; viruses = []; ejected = []; effects = [];
+  spawnPellets(PELLET_COUNT); spawnVirus(20);
+  for(let i=0;i<BOT_COUNT;i++) bots.push(spawnBot());
+  player.color = pick(PALETTE);
+  respawnPlayer();
+  camera.zoom = 1;
+  gameState = 'play';
+}
+function avg(arr,key){ let s=0,w=0; for(const c of arr){ s+=c[key]*c.mass; w+=c.mass; } return w? s/w : 0; }
+
+function steer(c, dt){
+  let sp = speedOf(c.mass);
+  // BOSS 模式：玩家速度大幅提升，且与自身体积完全无关
+  if(c.isPlayer && bossMode) sp = 8.5;
+  const dx = c.tx-c.x, dy = c.ty-c.y;
+  const d = Math.hypot(dx,dy)||1;
+  const f = Math.min(d/60, 1);
+  const ax = dx/d*sp*f, ay = dy/d*sp*f;
+  c.vx += (ax-c.vx)*0.12; c.vy += (ay-c.vy)*0.12;
+  c.x += c.vx*dt*60; c.y += c.vy*dt*60;
+  c.x = clamp(c.x, c.r*0.4, WORLD-c.r*0.4);
+  c.y = clamp(c.y, c.r*0.4, WORLD-c.r*0.4);
+}
+
+function botThink(b){
+  b.ejectCd = (b.ejectCd||0) - 0.25;
+  // ===== BOSS 模式：全部球球主动围剿玩家，持续吐豆 =====
+  if(bossMode && b.boss && player && player.cells.length){
+    let tgt = player.cells[0];
+    for(const c of player.cells) if(c.mass>tgt.mass) tgt=c;
+    const distT = Math.hypot(tgt.x-b.x, tgt.y-b.y);
+    b.tx = tgt.x + tgt.vx*6; b.ty = tgt.y + tgt.vy*6;
+    // 只有靠近玩家（850 距离内）的 BOSS 才开火，避免全图弹幕
+    if(b.ejectCd<=0 && distT < 850){
+      b.ejectCd = rand(2.0,3.2); // BOSS 吐豆频率
+      const aimTx=b.tx, aimTy=b.ty;
+      b.tx = tgt.x + tgt.vx*14; b.ty = tgt.y + tgt.vy*14; // 预判提前量更大
+      doEject(b);
+      b.tx = aimTx; b.ty = aimTy;
+    }
+    // 玩家反超太多时 BOSS 会躲
+    if(tgt.mass > b.mass*1.25){
+      b.tx = b.x + (b.x-tgt.x)*4; b.ty = b.y + (b.y-tgt.y)*4;
+    }
+    return;
+  }
+  const cells = allCells().filter(c=>c!==b);
+  let target=null, bestD=1e9;
+  // 附近更小的细胞 -> 追（保护期内玩家不是追击目标）
+  for(const c of cells){
+    if(c.isPlayer && playerProtected) continue;
+    const d = Math.hypot(c.x-b.x, c.y-b.y);
+    if(c.mass < b.mass*0.82 && d<620 && d<bestD){ target=c; bestD=d; }
+  }
+  // 有更大的威胁 -> 逃，并偶尔朝威胁吐豆豆反击
+  let threat = null, threatD = 1e9;
+  for(const c of cells){
+    const d = Math.hypot(c.x-b.x, c.y-b.y);
+    if(c.mass > b.mass*1.2 && d<480 && d<threatD){ threat = c; threatD = d; }
+  }
+  if(threat){
+    b.tx = b.x + (b.x-threat.x)*3 + rand(-200,200);
+    b.ty = b.y + (b.y-threat.y)*3 + rand(-200,200);
+    if(b.ejectCd<=0 && b.mass>12 && Math.random()<0.5){
+      b.ejectCd = ejectCooldown(b.mass)*rand(1.1,1.8); // 同样的体积射速规则，带随机抖动
+      const aimTx = b.tx, aimTy = b.ty;
+      b.tx = threat.x + threat.vx*8; b.ty = threat.y + threat.vy*8; // 预判射击
+      doEject(b);
+      b.tx = aimTx; b.ty = aimTy;
+    }
+    return;
+  }
+  if(target){ b.tx=target.x; b.ty=target.y; return; }
+  // 找最近的孢子团
+  let bp=null, bd=1e9;
+  for(let i=0;i<pellets.length;i+=7){
+    const p=pellets[i], d=Math.hypot(p.x-b.x,p.y-b.y);
+    if(d<bd){ bd=d; bp=p; }
+  }
+  if(bp && Math.random()<0.9){ b.tx=bp.x; b.ty=bp.y; }
+  else { b.wander += rand(-0.8,0.8); b.tx=clamp(b.x+Math.cos(b.wander)*500,100,WORLD-100); b.ty=clamp(b.y+Math.sin(b.wander)*500,100,WORLD-100); }
+}
+
+function playerDie(){
+  gameState='dead';
+  bossMode = false; // 玩家阵亡解除 BOSS 模式，全场球球恢复普通
+  for(const b of bots){ if(b.boss){ b.boss=false; b.mass=rand(16,60); b.r=massToR(b.mass); } }
+  const banner = document.getElementById('bossBanner');
+  banner.style.display='none';
+  const alive = allCells().sort((a,b)=>b.mass-a.mass);
+  let rank = 1; for(const c of alive){ if(c.mass>22) rank++; }
+  document.getElementById('deathRank').textContent = '存活排名 #'+rank;
+  document.getElementById('deathScore').textContent = '最终质量 '+Math.round(player.cells.reduce((s,c)=>s+c.mass,0))+' · 吃了 '+totalEaten+' 个孢子 · 豆豆命中 '+beanHits+' 次';
+  deathOverlay.style.display='flex';
+}
+
+// ================= 特效 =================
+let effects = [];
+function popEffect(x,y,color){
+  for(let i=0;i<10;i++){
+    const a=rand(0,6.28), s=rand(2,7);
+    effects.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,color,r:rand(3,8)});
+  }
+}
+function updateEffects(dt){
+  for(let i=effects.length-1;i>=0;i--){
+    const e=effects[i];
+    e.x+=e.vx*dt*60; e.y+=e.vy*dt*60; e.vx*=0.93; e.vy*=0.93;
+    e.life -= dt*1.8;
+    if(e.life<=0) effects.splice(i,1);
+  }
+}
+
+// ================= 渲染 =================
+let time = 0;
+function render(){
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0,0,W,H);
+
+  ctx.save();
+  ctx.translate(W/2, H/2);
+  ctx.scale(camera.zoom, camera.zoom);
+  ctx.translate(-camera.x, -camera.y);
+
+  const viewW = W/camera.zoom, viewH = H/camera.zoom;
+  const vx0 = camera.x-viewW/2, vy0 = camera.y-viewH/2, vx1=camera.x+viewW/2, vy1=camera.y+viewH/2;
+
+  // 边界
+  ctx.strokeStyle = '#f3d9e4'; ctx.lineWidth = 6/camera.zoom;
+  ctx.setLineDash([26,18]);
+  ctx.strokeRect(0,0,WORLD,WORLD);
+  ctx.setLineDash([]);
+
+  // 网格
+  const gap = 130;
+  ctx.strokeStyle = 'rgba(214,205,235,0.33)'; ctx.lineWidth = 1/camera.zoom;
+  ctx.beginPath();
+  for(let x=Math.max(0,Math.floor(vx0/gap)*gap); x<Math.min(WORLD,vx1); x+=gap){ ctx.moveTo(x,Math.max(0,vy0)); ctx.lineTo(x,Math.min(WORLD,vy1)); }
+  for(let y=Math.max(0,Math.floor(vy0/gap)*gap); y<Math.min(WORLD,vy1); y+=gap){ ctx.moveTo(Math.max(0,vx0),y); ctx.lineTo(Math.min(WORLD,vx1),y); }
+  ctx.stroke();
+
+  // 孢子
+  for(const p of pellets){
+    if(p.x<vx0-30||p.x>vx1+30||p.y<vy0-30||p.y>vy1+30) continue;
+    const pulse = 1 + Math.sin(time*2.4+p.phase)*0.16;
+    const r = (p.big?6.5:3.6)*pulse;
+    ctx.save();
+    ctx.shadowColor = p.color; ctx.shadowBlur = 12;
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(p.x,p.y,r,0,6.283); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.beginPath(); ctx.arc(p.x-r*0.28,p.y-r*0.32,r*0.3,0,6.283); ctx.fill();
+  }
+
+  // 吐出的豆豆（攻击豆有光晕+白圈，食物豆普通发光）
+  for(const p of ejected){
+    const r = p.atk ? 8 : 7;
+    ctx.save();
+    ctx.shadowColor=p.color; ctx.shadowBlur = p.atk ? 20 : 10;
+    ctx.fillStyle=p.color;
+    ctx.beginPath(); ctx.arc(p.x,p.y,r,0,6.283); ctx.fill();
+    if(p.atk){
+      ctx.shadowBlur=0;
+      ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.lineWidth=2.5;
+      ctx.beginPath(); ctx.arc(p.x,p.y,r+3,0,6.283); ctx.stroke();
+      // 拖尾
+      ctx.globalAlpha=0.35; ctx.fillStyle=p.color;
+      ctx.beginPath(); ctx.arc(p.x-p.vx*1.6, p.y-p.vy*1.6, r*0.7, 0, 6.283); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // 病毒刺球
+  for(const v of viruses){
+    const r = massToR(v.m);
+    ctx.save();
+    ctx.translate(v.x, v.y);
+    ctx.shadowColor=v.color; ctx.shadowBlur=18;
+    ctx.fillStyle=v.color;
+    ctx.beginPath();
+    const spikes=14;
+    for(let i=0;i<spikes*2;i++){
+      const ang=i/(spikes*2)*6.283 + time*0.15;
+      const rr = i%2===0 ? r : r*0.8;
+      ctx.lineTo(Math.cos(ang)*rr, Math.sin(ang)*rr);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.fillStyle='rgba(255,255,255,0.5)';
+    ctx.beginPath(); ctx.arc(-r*0.25,-r*0.25,r*0.28,0,6.283); ctx.fill();
+    ctx.restore();
+  }
+
+  // 细胞
+  const cells = allCells().sort((a,b)=>a.mass-b.mass);
+  for(const c of cells) drawCell(c);
+
+  // 特效
+  for(const e of effects){
+    if(e.txt){
+      ctx.globalAlpha = Math.min(1, e.life*1.5);
+      ctx.font = '800 16px "PingFang SC","Microsoft YaHei",sans-serif';
+      ctx.textAlign='center';
+      ctx.fillStyle = e.color;
+      ctx.fillText(e.txt, e.x, e.y);
+    } else {
+      ctx.globalAlpha = e.life;
+      ctx.fillStyle = e.color;
+      ctx.beginPath(); ctx.arc(e.x,e.y,e.r*e.life,0,6.283); ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.restore();
+  renderMinimap();
+  renderBoard();
+  // 豆豆技能冷却提示（按钮变暗）
+  const be = document.getElementById('btnEject');
+  const op = (gameState==='play' && beanCd>0) ? 0.35 : 1;
+  if(be._op !== op){ be.style.opacity = op; be._op = op; }
+}
+
+function drawCell(c){
+  const wobble = Math.sin(time*3+c.wobble)*0.015;
+  const r = c.r*(1+wobble);
+  ctx.save();
+  // 柔光（BOSS 球球用红色警示光环）
+  ctx.shadowColor = c.boss ? '#ff5f7a' : c.color;
+  ctx.shadowBlur = c.boss ? r*0.9 + Math.sin(time*6)*8 : r*0.55;
+  // 身体
+  const g = ctx.createRadialGradient(c.x-r*0.3, c.y-r*0.35, r*0.15, c.x, c.y, r);
+  g.addColorStop(0, lighten(c.color, 0.28));
+  g.addColorStop(1, c.color);
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, 6.283); ctx.fill();
+  ctx.shadowBlur = 0;
+  // 干净描边
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = Math.max(2, r*0.045);
+  ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, 6.283); ctx.stroke();
+  ctx.strokeStyle = shade(c.color, 0.12); ctx.globalAlpha=0.35;
+  ctx.lineWidth = Math.max(1.5, r*0.03);
+  ctx.beginPath(); ctx.arc(c.x, c.y, r-ctx.lineWidth*1.2, 0, 6.283); ctx.stroke();
+  ctx.globalAlpha = 1;
+  // 高光
+  ctx.fillStyle='rgba(255,255,255,0.45)';
+  ctx.beginPath(); ctx.ellipse(c.x-r*0.32, c.y-r*0.4, r*0.3, r*0.18, -0.6, 0, 6.283); ctx.fill();
+
+  // 可爱表情（够大才画）
+  if(r > 16){
+    const dx = c.vx||1, dy = c.vy||0;
+    const d = Math.hypot(dx,dy)||1;
+    const look = Math.min(d*0.06, 0.35);
+    const ex = dx/d*look*r*0.5, ey = dy/d*look*r*0.5;
+    const eyeY = c.y - r*0.12, eyeGap = r*0.3, eyeR = r*0.14;
+    c.blink = Math.max(0, c.blink - 0.016);
+    if(Math.random()<0.004) c.blink = 0.22;
+    const eh = c.blink>0 ? eyeR*0.15 : eyeR;
+    for(const s of [-1,1]){
+      ctx.fillStyle='#ffffff';
+      ctx.beginPath(); ctx.ellipse(c.x+s*eyeGap+ex, eyeY+ey, eyeR, eh, 0,0,6.283); ctx.fill();
+      if(c.blink<=0){
+        ctx.fillStyle='#5d5470';
+        ctx.beginPath(); ctx.arc(c.x+s*eyeGap+ex*1.6, eyeY+ey*1.6, eyeR*0.5, 0, 6.283); ctx.fill();
+        ctx.fillStyle='rgba(255,255,255,0.9)';
+        ctx.beginPath(); ctx.arc(c.x+s*eyeGap+ex*1.6-eyeR*0.15, eyeY+ey*1.6-eyeR*0.2, eyeR*0.16, 0, 6.283); ctx.fill();
+      }
+    }
+    // 腮红 + 微笑
+    ctx.fillStyle='rgba(255,150,170,0.35)';
+    for(const s of [-1,1]){ ctx.beginPath(); ctx.ellipse(c.x+s*r*0.5+ex*0.4, eyeY+r*0.22, r*0.1, r*0.06, 0,0,6.283); ctx.fill(); }
+    ctx.strokeStyle='#8a7ba0'; ctx.lineWidth=Math.max(1.4,r*0.03); ctx.lineCap='round';
+    ctx.beginPath(); ctx.arc(c.x+ex*0.5, eyeY+r*0.18+ey*0.5, r*0.14, 0.25, 2.9); ctx.stroke();
+  }
+
+  // 名字
+  if(r > 13){
+    ctx.font = `800 ${Math.max(11, r*0.34)}px "PingFang SC","Microsoft YaHei",sans-serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillStyle = c.boss ? '#e8435f' : 'rgba(93,84,112,0.9)';
+    ctx.fillText((c.boss?'👑':'')+c.name, c.x, c.y + r*0.5);
+  }
+  // 质量数字
+  if(r > 26 && (c.isPlayer || c.mass>150)){
+    ctx.font = `600 ${Math.max(9, r*0.2)}px sans-serif`;
+    ctx.fillStyle='rgba(93,84,112,0.55)';
+    ctx.fillText(Math.round(c.mass), c.x, c.y + r*0.5 + r*0.24);
+  }
+  ctx.restore();
+}
+
+function lighten(hex,p){
+  const [r,g,b] = hexRgb(hex);
+  return `rgb(${r+(255-r)*p|0},${g+(255-g)*p|0},${b+(255-b)*p|0})`;
+}
+function shade(hex,p){
+  const [r,g,b] = hexRgb(hex);
+  return `rgb(${r*(1-p)|0},${g*(1-p)|0},${b*(1-p)|0})`;
+}
+function hexRgb(h){ return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]; }
+
+// 小地图
+function renderMinimap(){
+  mctx.clearRect(0,0,240,240);
+  mctx.fillStyle='rgba(250,247,253,0.9)'; mctx.fillRect(0,0,240,240);
+  const s = 240/WORLD;
+  mctx.fillStyle='#f0e6f2'; mctx.fillRect(0,0,240,240);
+  for(const c of allCells()){
+    if(c.isPlayer) continue;
+    mctx.fillStyle = c.color;
+    mctx.beginPath(); mctx.arc(c.x*s, c.y*s, Math.max(3, c.r*s), 0, 6.283); mctx.fill();
+  }
+  if(gameState==='play') for(const c of player.cells){
+    mctx.fillStyle = '#f06a9b';
+    mctx.beginPath(); mctx.arc(c.x*s, c.y*s, Math.max(4, c.r*s), 0, 6.283); mctx.fill();
+    mctx.strokeStyle='#fff'; mctx.lineWidth=2; mctx.stroke();
+  }
+}
+
+// 排行榜
+function renderBoard(){
+  const rows = document.getElementById('boardRows');
+  const list = allCells().map(c=>({name:c.name, mass:Math.round(c.mass), me:c.isPlayer}))
+    .sort((a,b)=>b.mass-a.mass).slice(0,BOARD_TOP);
+  let html='';
+  list.forEach((it,i)=>{
+    html += `<div class="row ${it.me?'me':''}"><span><span class="rank">${i+1}</span> ${it.name}</span><span>${it.mass}</span></div>`;
+  });
+  if(html !== rows._h){ rows.innerHTML = html; rows._h = html; }
+  if(gameState==='play'){
+    const m = Math.round(player.cells.reduce((s,c)=>s+c.mass,0));
+    const mv = document.getElementById('massVal');
+    if(mv._m !== m){ mv.textContent = m; mv._m = m; }
+    const cc = '分身 '+player.cells.length+'/'+MAX_CELLS+'（无限次）'
+      + (bossMode?' · 👑BOSS':'') + (playerProtected?' · 🛡保护期':'');
+    const ce = document.getElementById('cellCount');
+    if(ce._t !== cc){ ce.textContent = cc; ce._t = cc; }
+  }
+}
+
+// ================= 主循环 =================
+let last = performance.now();
+function loop(now){
+  const dt = Math.min((now-last)/1000, 0.05);
+  last = now; time += dt;
+  if(gameState==='play' || gameState==='dead') update(dt);
+  else if(gameState==='menu'){ // 菜单背景：机器人自己玩
+    for(const b of bots){ b.think-=dt; if(b.think<=0){ b.think=rand(0.2,0.5); botThink(b);} steer(b,dt); }
+    camera.x += Math.sin(time*0.1)*1.2; camera.y += Math.cos(time*0.13)*1.2;
+    camera.zoom = 0.7;
+    updateEffects(dt);
+  }
+  render();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// 默认名字
+document.getElementById('nameInput').value = pick(['小泡芙','糯米团','果冻球','马卡龙','小汤圆']);
+</script>
+</body>
+</html>
